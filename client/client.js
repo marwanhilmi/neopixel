@@ -3,7 +3,8 @@
  
 var tessel = require('tessel');
 var fs = require('fs');
-var script =  '/tessel/animation.js';
+var script =  '/../animation.js';
+var clone = require('structured-clone')
 
 console.log(__dirname);
 tessel.findTessel(null, true, function(err, client) {
@@ -22,7 +23,7 @@ tessel.findTessel(null, true, function(err, client) {
           // Stop on Ctrl+C.
           process.on('SIGINT', function() {
             setTimeout(function () {
-              logs.info('Script aborted');
+              console.info('Script aborted');
               process.exit(131);
             }, 200);
             client.stop();
@@ -36,15 +37,50 @@ tessel.findTessel(null, true, function(err, client) {
     });
 });
 
+var compareAll = function(a, b) {
+  for (var i = 0; i < a.length; i++) {
+    if (!bufCompare(a[i], b[i])) {
+      console.log('failure at index i', a[i], b[i]);
+      return;
+    }
+  }
+
+  console.log('all clear');
+}
+
+var bufCompare = function (a, b) {
+  if (!Buffer.isBuffer(a)) return undefined;
+  if (!Buffer.isBuffer(b)) return undefined;
+  if (typeof a.equals === 'function') return a.equals(b);
+  if (a.length !== b.length) return false;
+  
+  for (var i = 0; i < a.length; i++) {
+      if (a[i] !== b[i]) return false;
+  }
+  
+  return true;
+};
+
 function sendAnimation (client) {
   var arr = createAnimation();
-  var fireworks = [arr, null, null];
-  client.interface.writeProcessMessage({fireworks:fireworks})
-  client.once('message', function (m) {
-    if (m.status = 'complete') {
-      console.log('fireworks and finished!!');
-    }
-  });
+  // after = clone.deserialize(clone.serialize(arr));
+  // compareAll(arr, after);
+  var frameBuf = new Buffer(arr);
+  var lengthBuff = new Buffer(4);
+  console.log('frame length', arr[0].length);
+  lengthBuff.writeUInt32BE(arr[0].length, 0);
+  console.log('about to concat')
+
+  var toSend = Buffer.concat([lengthBuff, frameBuf]);
+  console.log('sending message...');
+  console.log('sending', toSend);
+  client.interface.writeProcessMessageRaw(toSend);
+  console.log('sent message!');
+  // client.once('message', function (m) {
+  //   if (m.status = 'complete') {
+  //     console.log('fireworks and finished!!');
+  //   }
+  // });
 }
 
 function createAnimation() {
